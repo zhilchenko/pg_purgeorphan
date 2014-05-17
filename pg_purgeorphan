@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# check arguments
+if (( "$#" < 1 ))
+then
+  echo "Usage: $0 <log_file>"
+  exit 1
+fi
+
+# declare vars
+LOGFILE=$1
+TABLE=''
+DB=''
+
+# get orphan tables and db names
+TABLES=`grep 'autovacuum: found orphan temp table\|автоочистка: найдена устаревшая врем. таблица' ${LOGFILE} | grep -v '(null)' | grep -Po '\ "\K[^"]*' | paste  - - | sort | uniq`
+
+# exit if nothing found
+if [ -z "${TABLES}" ]
+then
+ echo "No orphan tables found!"
+ exit 0
+fi
+
+echo -e "Next tables will be removed: \nTABLE\t\tDB\n${TABLES}\nCAUTION! THIS CAN BE DANGEROUS! You must have a backup.\nContinue?"
+
+select result in Yes No
+do
+    if [[ $result == "Yes" ]]
+    then
+     for i in ${TABLES} ; do
+      if [ -z "${TABLE}" ]
+       then
+        TABLE=$i
+        DB=''
+       else
+        DB=$i
+        psql -d ${DB} -c "DROP SCHEMA ${TABLE} CASCADE;"
+        TABLE=''
+      fi
+     done
+     exit 0
+    else
+     echo "Terminating."
+     exit 2
+    fi
+done
+
